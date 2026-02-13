@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String
+  name            String?
+  subscription    Subscription @default(FREE)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  instances       Instance[]
+  usageRecords    UsageRecord[]
+}
+
+enum Subscription {
+  FREE
+  PRO
+  PREMIUM
+}
+
+model Instance {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  containerId     String?   @unique
+  dockerPort      Int       @unique
+  status          InstanceStatus @default(PENDING)
+  openclawVersion String?
+  configJson      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  usageRecords    InstanceUsage[]
+}
+
+enum InstanceStatus {
+  PENDING
+  STARTING
+  RUNNING
+  STOPPED
+  ERROR
+  DELETED
+}
+
+model UsageRecord {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  date            DateTime  @db.Date
+  inputTokens     Int       @default(0)
+  outputTokens    Int       @default(0)
+  totalCost       Float     @default(0)
+  messagesCount   Int       @default(0)
+  toolCallsCount  Int       @default(0)
+
+  @@unique([userId, date])
+}
+
+model InstanceUsage {
+  id              String    @id @default(uuid())
+  instanceId      String
+  instance        Instance  @relation(fields: [instanceId], references: [id])
+  date            DateTime  @db.Date
+  inputTokens     Int       @default(0)
+  outputTokens    Int       @default(0)
+  totalCost       Float     @default(0)
+  messagesCount   Int       @default(0)
+
+  @@unique([instanceId, date])
+}

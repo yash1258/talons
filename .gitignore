@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+claw-backend/node_modules/
+
+# Build output
+claw-backend/dist/
+
+# Environment files (contain secrets)
+.env
+claw-backend/.env
+
+# Android build artifacts
+claw-android/.gradle/
+claw-android/build/
+claw-android/app/build/
+claw-android/local.properties
+*.apk
+
+# OpenClaw source (large, not needed for deployment)
+openclaw/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+postgres_data/
+redis_data/
+
+# Agent/AI artifacts
+.agent/
+.gemini/
+
+# Misc
+*.log
