@@ -128,7 +128,9 @@ private fun ConnectionStatusCard(connectionState: ConnectionState) {
             Icon(
                 imageVector = when (connectionState) {
                     is ConnectionState.Connected -> Icons.Default.CheckCircle
-                    is ConnectionState.Connecting -> Icons.Default.Sync
+                    is ConnectionState.Connecting,
+                    is ConnectionState.WaitingForChallenge,
+                    is ConnectionState.Authenticating -> Icons.Default.Sync
                     is ConnectionState.Error -> Icons.Default.Error
                     else -> Icons.Default.CloudOff
                 },
@@ -145,6 +147,8 @@ private fun ConnectionStatusCard(connectionState: ConnectionState) {
                     text = when (connectionState) {
                         is ConnectionState.Connected -> "Connected"
                         is ConnectionState.Connecting -> "Connecting..."
+                        is ConnectionState.WaitingForChallenge -> "Connecting..."
+                        is ConnectionState.Authenticating -> "Authenticating..."
                         is ConnectionState.Error -> "Connection Error"
                         else -> "Disconnected"
                     },
