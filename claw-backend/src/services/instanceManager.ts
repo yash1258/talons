@@ -43,8 +43,9 @@ export async function createInstance(userId: string, opts: CreateInstanceOptions
   const authFlags = resolveAuthFlags(provider, apiKey);
 
   // Build the entrypoint: run onboarding first, then start the daemon
+  // Build the onboarding command using absolute path to avoid PATH issues
   const onboardCmd = [
-    'openclaw onboard',
+    '/home/node/.npm-global/bin/openclaw onboard',
     '--non-interactive',
     '--accept-risk',
     authFlags,
@@ -58,10 +59,10 @@ export async function createInstance(userId: string, opts: CreateInstanceOptions
     '--json',
   ].join(' ');
 
-  // Entrypoint script: onboard if not yet done, then start daemon
+  // Entrypoint script: onboard if not yet done, then start daemon using absolute path
   const entrypoint = [
     'sh', '-c',
-    `if [ ! -f "/home/node/.openclaw/openclaw.json" ]; then ${onboardCmd} || echo "Onboard exited with $?"; fi && exec openclaw --yes`,
+    `if [ ! -f "/home/node/.openclaw/openclaw.json" ]; then ${onboardCmd} || echo "Onboard exited with $?"; fi && exec /home/node/.npm-global/bin/openclaw --yes`,
   ];
 
   const container = await docker.createContainer({
