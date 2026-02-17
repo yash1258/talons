@@ -61,7 +61,7 @@ export async function createInstance(userId: string, opts: CreateInstanceOptions
   // Entrypoint script: onboard if not yet done, then start daemon
   const entrypoint = [
     'sh', '-c',
-    `if [ ! -f "$HOME/.openclaw/openclaw.json" ]; then ${onboardCmd} || echo "Onboard exited with $?"; fi && exec openclaw --yes`,
+    `if [ ! -f "/home/node/.openclaw/openclaw.json" ]; then ${onboardCmd} || echo "Onboard exited with $?"; fi && exec openclaw --yes`,
   ];
 
   const container = await docker.createContainer({
