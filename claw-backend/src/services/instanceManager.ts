@@ -1,10 +1,32 @@
 import { prisma } from '../db/prisma.js';
 import { docker, OPENCLAW_IMAGE, getAvailablePort } from './docker.js';
-import { generateConfig, writeConfigToContainer } from './configGenerator.js';
 import type { Instance } from '@prisma/client';
 import { randomBytes } from 'crypto';
 
-export async function createInstance(userId: string): Promise<Instance> {
+/**
+ * Resolves the --auth-choice and --<provider>-api-key flags for openclaw onboard.
+ */
+function resolveAuthFlags(provider?: string, apiKey?: string): string {
+  if (!apiKey) return '--auth-choice skip';
+
+  const providerMap: Record<string, { choice: string; flag: string }> = {
+    'openrouter': { choice: 'openrouter-api-key', flag: '--openrouter-api-key' },
+    'anthropic': { choice: 'apiKey', flag: '--anthropic-api-key' },
+    'openai': { choice: 'openai-api-key', flag: '--openai-api-key' },
+    'gemini': { choice: 'gemini-api-key', flag: '--gemini-api-key' },
+  };
+
+  const entry = providerMap[provider || 'openrouter'] || providerMap['openrouter'];
+  return `--auth-choice ${entry.choice} ${entry.flag} "${apiKey}"`;
+}
+
+export interface CreateInstanceOptions {
+  provider?: string;   // e.g. 'openrouter', 'anthropic', 'openai'
+  apiKey?: string;     // user's API key (BYOK) or empty for free tier
+  model?: string;      // e.g. 'anthropic/claude-sonnet-4-20250514'
+}
+
+export async function createInstance(userId: string, opts: CreateInstanceOptions = {}): Promise<Instance> {
   const port = await getAvailablePort();
   const instanceId = randomBytes(8).toString('hex');
   const containerName = `claw-${instanceId}`;
@@ -13,27 +35,39 @@ export async function createInstance(userId: string): Promise<Instance> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   const subscription = user?.subscription || 'FREE';
 
-  // Generate initial OpenClaw config with gateway auth token
-  const initialConfig = {
-    model: subscription === 'FREE' ? 'openrouter/free' : 'anthropic/claude-sonnet-4-20250514',
-    channels: {},
-  };
-  const openclawConfig = generateConfig(subscription, initialConfig);
+  // For free tier, use the pooled OpenRouter key
+  const OPENROUTER_FREE_KEY = process.env.OPENROUTER_FREE_KEY || '';
+  const isFree = subscription === 'FREE';
+  const provider = opts.provider || 'openrouter';
+  const apiKey = isFree ? OPENROUTER_FREE_KEY : (opts.apiKey || '');
+  const authFlags = resolveAuthFlags(provider, apiKey);
 
-  // Add gateway auth settings to the config
-  const fullConfig: Record<string, any> = {
-    ...openclawConfig as Record<string, any>,
-    gateway: {
-      auth: {
-        token: gatewayToken,
-      },
-    },
-  };
+  // Build the entrypoint: run onboarding first, then start the daemon
+  const onboardCmd = [
+    'openclaw onboard',
+    '--non-interactive',
+    '--accept-risk',
+    authFlags,
+    `--gateway-token "${gatewayToken}"`,
+    '--gateway-bind auto',
+    '--gateway-port 18789',
+    '--skip-daemon',
+    '--skip-health',
+    '--skip-ui',
+    '--skip-skills',
+    '--json',
+  ].join(' ');
+
+  // Entrypoint script: onboard if not yet done, then start daemon
+  const entrypoint = [
+    'sh', '-c',
+    `if [ ! -f "$HOME/.openclaw/openclaw.json" ]; then ${onboardCmd} || echo "Onboard exited with $?"; fi && exec openclaw --yes`,
+  ];
 
   const container = await docker.createContainer({
     name: containerName,
     Image: OPENCLAW_IMAGE,
-    Cmd: ['openclaw', '--yes'],
+    Cmd: entrypoint,
     Env: [
       `OPENCLAW_PROFILE=${instanceId}`,
       `OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
@@ -58,24 +92,7 @@ export async function createInstance(userId: string): Promise<Instance> {
     },
   });
 
-  // Start container briefly to initialize the volume, then write config
   await container.start();
-
-  // Wait a moment for filesystem to be ready
-  await new Promise(resolve => setTimeout(resolve, 2000));
-
-  // Write the openclaw.json config into the container
-  const configJson = JSON.stringify(fullConfig, null, 2);
-  const exec = await container.exec({
-    Cmd: ['sh', '-c', `mkdir -p /home/node/.openclaw && echo '${configJson.replace(/'/g, "'\\''")}' > /home/node/.openclaw/openclaw.json`],
-    AttachStdout: true,
-    AttachStderr: true,
-    User: 'node',
-  });
-  await exec.start({});
-
-  // Restart so openclaw daemon picks up the config
-  await container.restart();
 
   const instance = await prisma.instance.create({
     data: {
@@ -84,7 +101,7 @@ export async function createInstance(userId: string): Promise<Instance> {
       dockerPort: port,
       status: 'RUNNING',
       openclawVersion: 'latest',
-      configJson: JSON.stringify(initialConfig),
+      configJson: JSON.stringify({ provider, model: opts.model }),
       gatewayToken,
     },
   });

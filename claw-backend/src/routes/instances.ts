@@ -18,7 +18,8 @@ instancesRouter.post('/', async (req: AuthRequest, res) => {
       return res.json(existing);
     }
 
-    const instance = await createInstance(req.userId!);
+    const { provider, apiKey, model } = req.body || {};
+    const instance = await createInstance(req.userId!, { provider, apiKey, model });
     res.status(201).json(instance);
   } catch (error) {
     console.error('Create instance error:', error);
