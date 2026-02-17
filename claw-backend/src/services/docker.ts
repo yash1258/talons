@@ -1,10 +1,10 @@
 import Docker from 'dockerode';
 
-const DOCKER_HOST = process.env.DOCKER_HOST || undefined;
+const DOCKER_SOCKET = process.env.DOCKER_HOST || '/var/run/docker.sock';
 
-export const docker = DOCKER_HOST 
-  ? new Docker({ host: DOCKER_HOST, port: 2375 })
-  : new Docker();
+export const docker = DOCKER_SOCKET.startsWith('unix:') || DOCKER_SOCKET.startsWith('/')
+  ? new Docker({ socketPath: DOCKER_SOCKET.replace('unix://', '') })
+  : new Docker({ host: DOCKER_SOCKET, port: 2375 });
 
 export const OPENCLAW_IMAGE = process.env.OPENCLAW_IMAGE || 'openclaw/openclaw:latest';
 export const BASE_PORT = parseInt(process.env.BASE_PORT || '20000');

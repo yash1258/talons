@@ -56,15 +56,15 @@ class DashboardViewModel(
     fun connectToGateway(instance: Instance) {
         viewModelScope.launch {
             // Build the gateway URL from the backend server URL + instance port
-            val serverUrl = tokenManager.getGatewayUrl()
+            val serverUrl = tokenManager.gatewayUrl.first()
             val url = if (serverUrl.isNullOrBlank()) {
                 // Fallback: use the backend's base URL with the instance's docker port
-                "http://10.0.2.2:${instance.dockerPort}"
+                "http://152.53.164.238:${instance.dockerPort}"
             } else {
                 serverUrl
             }
             
-            val token = tokenManager.getToken()
+            val token = tokenManager.token.first()
             gatewayClient.connect(url, token)
         }
     }

@@ -309,6 +309,7 @@ private fun AuthStep(
 // Step 2: AI Model Selection
 // ============================================================
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ModelStep(
     viewModel: OnboardingViewModel,

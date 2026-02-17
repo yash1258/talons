@@ -12,7 +12,7 @@ import java.io.IOException
 
 class ClawApi(private val client: OkHttpClient) {
     
-    private var baseUrl = "http://10.0.2.2:3000"
+    private var baseUrl = "http://152.53.164.238:4200"
     
     fun setBaseUrl(url: String) {
         baseUrl = url
