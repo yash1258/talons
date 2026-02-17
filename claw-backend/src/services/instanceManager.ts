@@ -36,7 +36,10 @@ export async function createInstance(userId: string): Promise<Instance> {
     Cmd: ['openclaw', '--yes'],
     Env: [
       `OPENCLAW_PROFILE=${instanceId}`,
-      `PORT=18789`,
+      `OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
+      `OPENCLAW_SKIP_BROWSER_CONTROL_SERVER=1`,
+      `OPENCLAW_SKIP_CANVAS_HOST=1`,
+      `OPENCLAW_SKIP_CRON=1`,
     ],
     HostConfig: {
       PortBindings: {

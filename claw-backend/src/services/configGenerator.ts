@@ -21,11 +21,11 @@ interface ClawConfig {
 /**
  * Builds an openclaw-compatible JSON config from user parameters.
  * 
- * The config is written to the container's data volume at:
- *   /home/node/.openclaw/openclaw.json
- * 
- * Free tier users get a pooled OpenRouter key with a free model.
- * Pro/Premium users provide their own key (BYOK).
+ * Format matches the real openclaw.json structure:
+ * - models.providers.{provider} for API keys
+ * - agents.defaults.model.primary for model selection
+ * - channels.{name} for messaging channels
+ * - gateway.auth.token for WebSocket authentication
  */
 export function generateConfig(
   subscription: string,
@@ -33,25 +33,46 @@ export function generateConfig(
 ): object {
   const isFree = subscription === 'FREE';
 
-  const model = userConfig.model || (isFree ? DEFAULT_FREE_MODEL : 'anthropic/claude-sonnet-4-20250514');
+  const model = userConfig.model || (isFree ? 'openrouter/auto' : 'anthropic/claude-sonnet-4-20250514');
   const apiKey = isFree ? OPENROUTER_FREE_KEY : (userConfig.apiKey || '');
 
-  // Determine provider from model string or explicit setting
+  // Determine provider from model string
   let provider = userConfig.provider || 'openrouter';
   if (model.startsWith('anthropic/')) provider = 'anthropic';
   else if (model.startsWith('openai/') || model.startsWith('gpt-')) provider = 'openai';
   else if (model.startsWith('openrouter/')) provider = 'openrouter';
 
-  // Build base config
+  // Build config in real openclaw.json format
   const config: Record<string, any> = {
-    llm: {
-      provider,
-      model: model.replace(/^(openrouter|anthropic|openai)\//, ''),
-      ...(provider === 'openrouter' && { apiKey }),
-      ...(provider === 'anthropic' && { apiKey }),
-      ...(provider === 'openai' && { apiKey }),
+    models: {
+      providers: {
+        [provider]: {
+          apiKey,
+          ...(provider === 'openrouter' && {
+            baseUrl: 'https://openrouter.ai/api/v1',
+            api: 'openai-completions',
+          }),
+          ...(provider === 'anthropic' && {
+            api: 'anthropic-messages',
+          }),
+          ...(provider === 'openai' && {
+            api: 'openai-responses',
+          }),
+        },
+      },
+    },
+    agents: {
+      defaults: {
+        model: {
+          primary: model,
+        },
+        maxConcurrent: 2,
+      },
     },
     channels: {},
+    commands: {
+      native: 'auto',
+    },
   };
 
   // Add channel configs
@@ -59,6 +80,8 @@ export function generateConfig(
     config.channels.telegram = {
       enabled: true,
       botToken: userConfig.channels.telegram.botToken,
+      dmPolicy: 'pairing',
+      groupPolicy: 'allowlist',
     };
   }
 
@@ -72,7 +95,9 @@ export function generateConfig(
   if (userConfig.channels?.discord) {
     config.channels.discord = {
       enabled: true,
-      botToken: userConfig.channels.discord.botToken,
+      token: userConfig.channels.discord.botToken,
+      dmPolicy: 'pairing',
+      groupPolicy: 'disabled',
     };
   }
 
