@@ -2,7 +2,6 @@ import { docker } from './docker.js';
 import type { Instance } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 
-const DEFAULT_FREE_MODEL = 'openrouter/free';
 const OPENROUTER_FREE_KEY = process.env.OPENROUTER_FREE_KEY || '';
 
 interface ChannelConfig {
@@ -105,47 +104,107 @@ export function generateConfig(
 }
 
 /**
- * Writes the generated config into the container's data volume.
- * Uses docker exec to write the file since the volume is mounted.
+ * Reads the current openclaw.json from inside the container.
  */
-export async function writeConfigToContainer(
-  instance: Instance,
-  config: object
-): Promise<void> {
-  if (!instance.containerId) {
-    throw new Error('Instance has no container ID — is it running?');
-  }
+async function readContainerConfig(instance: Instance): Promise<Record<string, any>> {
+  if (!instance.containerId) throw new Error('Instance has no container ID');
   const container = docker.getContainer(instance.containerId);
-  const configJson = JSON.stringify(config, null, 2);
 
-  // Write config via docker exec
   const exec = await container.exec({
-    Cmd: ['sh', '-c', `echo '${configJson.replace(/'/g, "'\\''")}' > /home/node/.openclaw/openclaw.json`],
+    Cmd: ['cat', '/home/node/.openclaw/openclaw.json'],
     AttachStdout: true,
     AttachStderr: true,
   });
 
+  const stream = await exec.start({});
+  return new Promise((resolve, reject) => {
+    let data = '';
+    stream.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+    stream.on('end', () => {
+      try {
+        // Docker multiplexed stream may have header bytes — strip non-JSON prefix
+        const jsonStart = data.indexOf('{');
+        const json = jsonStart >= 0 ? data.slice(jsonStart) : data;
+        resolve(JSON.parse(json));
+      } catch {
+        resolve({});
+      }
+    });
+    stream.on('error', reject);
+  });
+}
+
+/**
+ * Writes config JSON back into the container's openclaw.json.
+ */
+async function writeContainerConfig(instance: Instance, config: Record<string, any>): Promise<void> {
+  if (!instance.containerId) throw new Error('Instance has no container ID');
+  const container = docker.getContainer(instance.containerId);
+  const configJson = JSON.stringify(config, null, 2);
+
+  const exec = await container.exec({
+    Cmd: ['sh', '-c', `cat > /home/node/.openclaw/openclaw.json << 'CLAWEOF'\n${configJson}\nCLAWEOF`],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
   await exec.start({});
 }
 
 /**
- * Updates the instance's stored config in the database and writes it to the container.
+ * Updates the instance config by reading the existing openclaw.json,
+ * merging in the user's changes, writing it back, and restarting the daemon.
  */
 export async function updateInstanceConfig(
   instance: Instance,
   userConfig: ClawConfig
 ): Promise<void> {
-  const user = await prisma.user.findUnique({ where: { id: instance.userId } });
-  if (!user) throw new Error('User not found');
+  // Read existing config from container (created by onboarding)
+  const existing = await readContainerConfig(instance);
 
-  const config = generateConfig(user.subscription, userConfig);
+  // Merge channel settings
+  if (userConfig.channels?.telegram) {
+    existing.channels = existing.channels || {};
+    existing.channels.telegram = {
+      ...existing.channels.telegram,
+      enabled: true,
+      botToken: userConfig.channels.telegram.botToken,
+      dmPolicy: existing.channels?.telegram?.dmPolicy || 'pairing',
+      groupPolicy: existing.channels?.telegram?.groupPolicy || 'allowlist',
+    };
+  }
 
-  // Store config choices in database
+  if (userConfig.channels?.discord) {
+    existing.channels = existing.channels || {};
+    existing.channels.discord = {
+      ...existing.channels.discord,
+      enabled: true,
+      token: userConfig.channels.discord.botToken,
+      dmPolicy: 'pairing',
+      groupPolicy: 'disabled',
+    };
+  }
+
+  // Merge model settings if provided
+  if (userConfig.model) {
+    existing.agents = existing.agents || {};
+    existing.agents.defaults = existing.agents.defaults || {};
+    existing.agents.defaults.model = existing.agents.defaults.model || {};
+    existing.agents.defaults.model.primary = userConfig.model;
+  }
+
+  // Write merged config back
+  await writeContainerConfig(instance, existing);
+
+  // Store user-facing config in database
   await prisma.instance.update({
     where: { id: instance.id },
     data: { configJson: JSON.stringify(userConfig) },
   });
 
-  // Write to container
-  await writeConfigToContainer(instance, config);
+  // Restart container so daemon picks up the new config
+  if (instance.containerId) {
+    const container = docker.getContainer(instance.containerId);
+    await container.restart();
+  }
 }
+
