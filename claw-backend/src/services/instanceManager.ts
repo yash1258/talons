@@ -8,23 +8,35 @@ export async function createInstance(userId: string): Promise<Instance> {
   const port = await getAvailablePort();
   const instanceId = randomBytes(8).toString('hex');
   const containerName = `claw-${instanceId}`;
+  const gatewayToken = randomBytes(32).toString('hex');
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   const subscription = user?.subscription || 'FREE';
 
-  // Generate initial config based on subscription tier
+  // Generate initial OpenClaw config with gateway auth token
   const initialConfig = {
     model: subscription === 'FREE' ? 'openrouter/free' : 'anthropic/claude-sonnet-4-20250514',
     channels: {},
   };
   const openclawConfig = generateConfig(subscription, initialConfig);
 
+  // Add gateway auth settings to the config
+  const fullConfig: Record<string, any> = {
+    ...openclawConfig as Record<string, any>,
+    gateway: {
+      auth: {
+        token: gatewayToken,
+      },
+    },
+  };
+
   const container = await docker.createContainer({
     name: containerName,
     Image: OPENCLAW_IMAGE,
+    Cmd: ['openclaw', '--yes'],
     Env: [
       `OPENCLAW_PROFILE=${instanceId}`,
-      `PORT=${port}`,
+      `PORT=18789`,
     ],
     HostConfig: {
       PortBindings: {
@@ -43,21 +55,35 @@ export async function createInstance(userId: string): Promise<Instance> {
     },
   });
 
+  // Start container briefly to initialize the volume, then write config
+  await container.start();
+
+  // Wait a moment for filesystem to be ready
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // Write the openclaw.json config into the container
+  const configJson = JSON.stringify(fullConfig, null, 2);
+  const exec = await container.exec({
+    Cmd: ['sh', '-c', `mkdir -p /home/node/.openclaw && echo '${configJson.replace(/'/g, "'\\''")}' > /home/node/.openclaw/openclaw.json`],
+    AttachStdout: true,
+    AttachStderr: true,
+    User: 'node',
+  });
+  await exec.start({});
+
+  // Restart so openclaw daemon picks up the config
+  await container.restart();
+
   const instance = await prisma.instance.create({
     data: {
       userId,
       containerId: container.id,
       dockerPort: port,
-      status: 'STARTING',
+      status: 'RUNNING',
       openclawVersion: 'latest',
+      configJson: JSON.stringify(initialConfig),
+      gatewayToken,
     },
-  });
-
-  await container.start();
-
-  await prisma.instance.update({
-    where: { id: instance.id },
-    data: { status: 'RUNNING' },
   });
 
   return instance;
