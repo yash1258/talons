@@ -21,22 +21,26 @@ export async function pullLatestImage(): Promise<void> {
   }
 }
 
-export async function getAvailablePort(): Promise<number> {
+/**
+ * Returns a set of ports currently used by ANY container (running or stopped).
+ */
+export async function getUsedDockerPorts(): Promise<Set<number>> {
   const containers = await docker.listContainers({ all: true });
-  const usedPorts = new Set(
-    containers
-      .filter(c => c.Ports.some(p => p.PublicPort))
-      .map(c => c.Ports.find(p => p.PublicPort)?.PublicPort)
-  );
+  const usedPorts = new Set<number>();
 
-  for (let port = BASE_PORT; port < BASE_PORT + MAX_CONTAINERS; port++) {
-    if (!usedPorts.has(port)) {
-      return port;
+  for (const container of containers) {
+    if (container.Ports) {
+      for (const p of container.Ports) {
+        if (p.PublicPort) {
+          usedPorts.add(p.PublicPort);
+        }
+      }
     }
   }
 
-  throw new Error('No available ports');
+  return usedPorts;
 }
+
 
 export async function getContainerStats(): Promise<{ running: number; total: number }> {
   const containers = await docker.listContainers({ all: true });

@@ -1,7 +1,26 @@
 import { prisma } from '../db/prisma.js';
-import { docker, OPENCLAW_IMAGE, getAvailablePort } from './docker.js';
+import { docker, OPENCLAW_IMAGE, getUsedDockerPorts, BASE_PORT, MAX_CONTAINERS } from './docker.js';
 import type { Instance } from '@prisma/client';
 import { randomBytes } from 'crypto';
+
+/**
+ * Finds a port that is not used by any Docker container OR any active instance in the DB.
+ */
+async function getAvailablePort(): Promise<number> {
+  const usedDockerPorts = await getUsedDockerPorts();
+  const activeInstances = await prisma.instance.findMany({
+    where: { status: { not: 'DELETED' } },
+    select: { dockerPort: true },
+  });
+  const usedDbPorts = new Set(activeInstances.map(i => i.dockerPort));
+
+  for (let port = BASE_PORT; port < BASE_PORT + MAX_CONTAINERS; port++) {
+    if (!usedDockerPorts.has(port) && !usedDbPorts.has(port)) {
+      return port;
+    }
+  }
+  throw new Error('No available ports');
+}
 
 /**
  * Resolves the --auth-choice and --<provider>-api-key flags for openclaw onboard.
@@ -42,10 +61,11 @@ export async function createInstance(userId: string, opts: CreateInstanceOptions
   const apiKey = isFree ? OPENROUTER_FREE_KEY : (opts.apiKey || '');
   const authFlags = resolveAuthFlags(provider, apiKey);
 
-  // Build the entrypoint: run onboarding first, then start the daemon
+  const OPENCLAW_BIN = '/home/node/.npm-global/bin/openclaw';
+
   // Build the onboarding command using absolute path to avoid PATH issues
   const onboardCmd = [
-    '/home/node/.npm-global/bin/openclaw onboard',
+    `${OPENCLAW_BIN} onboard`,
     '--non-interactive',
     '--accept-risk',
     authFlags,
@@ -59,10 +79,10 @@ export async function createInstance(userId: string, opts: CreateInstanceOptions
     '--json',
   ].join(' ');
 
-  // Entrypoint script: onboard if not yet done, then start daemon using absolute path
+  // Entrypoint script: onboard if not yet done, then start daemon using 'gateway run'
   const entrypoint = [
     'sh', '-c',
-    `if [ ! -f "/home/node/.openclaw/openclaw.json" ]; then ${onboardCmd} || echo "Onboard exited with $?"; fi && exec /home/node/.npm-global/bin/openclaw --yes`,
+    `if [ ! -f "/home/node/.openclaw/openclaw.json" ]; then ${onboardCmd} || echo "Onboard exited with $?"; fi && exec ${OPENCLAW_BIN} gateway run`,
   ];
 
   const container = await docker.createContainer({
