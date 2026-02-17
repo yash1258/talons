@@ -70,7 +70,7 @@ export async function createInstance(userId: string, opts: CreateInstanceOptions
     '--accept-risk',
     authFlags,
     `--gateway-token "${gatewayToken}"`,
-    '--gateway-bind auto',
+    '--gateway-bind lan',
     '--gateway-port 18789',
     '--skip-daemon',
     '--skip-health',
@@ -82,7 +82,7 @@ export async function createInstance(userId: string, opts: CreateInstanceOptions
   // Entrypoint script: onboard if not yet done, then start daemon using 'gateway run'
   const entrypoint = [
     'sh', '-c',
-    `if [ ! -f "/home/node/.openclaw/openclaw.json" ]; then ${onboardCmd} || echo "Onboard exited with $?"; fi && exec ${OPENCLAW_BIN} gateway run`,
+    `if [ ! -f "/home/node/.openclaw/openclaw.json" ]; then ${onboardCmd} || echo "Onboard exited with $?"; fi && exec ${OPENCLAW_BIN} gateway run --bind lan`,
   ];
 
   const container = await docker.createContainer({

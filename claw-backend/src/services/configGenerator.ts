@@ -155,6 +155,10 @@ export async function updateInstanceConfig(
     };
   }
 
+  // Ensure gateway bind is lan for Docker accessibility
+  existing.gateway = existing.gateway || {};
+  existing.gateway.bind = 'lan';
+
   if (userConfig.channels?.discord) {
     existing.channels = existing.channels || {};
     existing.channels.discord = {
