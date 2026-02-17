@@ -25,4 +25,8 @@ class InstanceRepository(
     suspend fun deleteInstance(instanceId: String): Result<Boolean> {
         return api.deleteInstance(instanceId)
     }
+
+    suspend fun approvePairing(instanceId: String, code: String): Result<Boolean> {
+        return api.approvePairing(instanceId, code)
+    }
 }

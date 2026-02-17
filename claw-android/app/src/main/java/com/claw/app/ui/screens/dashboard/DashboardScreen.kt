@@ -29,6 +29,30 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsState()
     val gatewayConnection by viewModel.gatewayConnection.collectAsState()
     
+    var showPairingDialog by remember { mutableStateOf<Instance?>(null) }
+    
+    if (uiState.pairingSuccess) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissPairingSuccess() },
+            title = { Text("Success") },
+            text = { Text("Pairing approved successfully!") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissPairingSuccess() }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    showPairingDialog?.let { instance ->
+        ApprovePairingDialog(
+            onDismiss = { showPairingDialog = null },
+            onConfirm = { code ->
+                viewModel.approvePairing(instance.id, code)
+                showPairingDialog = null
+            }
+        )
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -93,7 +117,8 @@ fun DashboardScreen(
                         InstanceCard(
                             instance,
                             onConnect = { viewModel.connectToGateway(instance) },
-                            onChannels = { onChannels(instance.id) }
+                            onChannels = { onChannels(instance.id) },
+                            onPairing = { showPairingDialog = instance }
                         )
                     }
                 }
@@ -215,7 +240,12 @@ private fun SubscriptionCard(uiState: DashboardUiState) {
 }
 
 @Composable
-private fun InstanceCard(instance: Instance, onConnect: () -> Unit, onChannels: () -> Unit = {}) {
+private fun InstanceCard(
+    instance: Instance, 
+    onConnect: () -> Unit, 
+    onChannels: () -> Unit = {},
+    onPairing: () -> Unit = {}
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -260,18 +290,74 @@ private fun InstanceCard(instance: Instance, onConnect: () -> Unit, onChannels: 
                 }
             }
             
-            // Channel setup button
+            // Action row
             Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = onChannels,
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Manage Channels")
+                OutlinedButton(
+                    onClick = onChannels,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Channels")
+                }
+                
+                if (instance.status == InstanceStatus.RUNNING) {
+                    OutlinedButton(
+                        onClick = onPairing,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Pairing")
+                    }
+                }
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ApprovePairingDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var code by remember { mutableStateOf("") }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Approve Pairing") },
+        text = {
+            Column {
+                Text("Enter the pairing code sent by your Telegram bot.")
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it },
+                    label = { Text("Pairing Code") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(code) },
+                enabled = code.isNotBlank()
+            ) {
+                Text("Approve")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable

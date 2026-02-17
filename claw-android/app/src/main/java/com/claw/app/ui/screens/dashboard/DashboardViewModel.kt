@@ -86,6 +86,23 @@ class DashboardViewModel(
                 }
         }
     }
+
+    fun approvePairing(instanceId: String, code: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            instanceRepository.approvePairing(instanceId, code)
+                .onSuccess {
+                    _uiState.update { it.copy(isLoading = false, pairingSuccess = true) }
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(isLoading = false, error = "Pairing failed: ${error.message}") }
+                }
+        }
+    }
+
+    fun dismissPairingSuccess() {
+        _uiState.update { it.copy(pairingSuccess = false) }
+    }
 }
 
 data class DashboardUiState(
@@ -94,5 +111,6 @@ data class DashboardUiState(
     val instances: List<Instance> = emptyList(),
     val usage: UsageSummary? = null,
     val subscriptionStatus: SubscriptionStatus? = null,
+    val pairingSuccess: Boolean = false,
     val error: String? = null
 )

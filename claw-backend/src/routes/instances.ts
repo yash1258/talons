@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../db/prisma.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
-import { docker } from '../services/docker.js';
+import { docker, executeInContainer } from '../services/docker.js';
 import { createInstance, getInstanceStatus, startInstance, stopInstance, deleteInstance } from '../services/instanceManager.js';
 
 export const instancesRouter = Router();
@@ -150,5 +150,43 @@ instancesRouter.get('/:id/health', async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Health check error:', error);
     res.status(500).json({ error: 'Health check failed' });
+  }
+});
+
+instancesRouter.post('/:id/pairing', async (req: AuthRequest, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'Pairing code required' });
+
+  try {
+    const instance = await prisma.instance.findFirst({
+      where: { id: req.params.id as string, userId: req.userId },
+    });
+
+    if (!instance || !instance.containerId) {
+      return res.status(404).json({ error: 'Instance or container not found' });
+    }
+
+    // Inspect container to find the profile name used in Env
+    const container = docker.getContainer(instance.containerId);
+    const info = await container.inspect();
+    const profileEnv = info.Config.Env.find(e => e.startsWith('OPENCLAW_PROFILE='));
+    const profile = profileEnv ? profileEnv.split('=')[1] : 'default';
+
+    console.log(`Approving pairing for instance ${instance.id} (profile: ${profile}) with code ${code}`);
+
+    const output = await executeInContainer(instance.containerId, [
+      '/home/node/.npm-global/bin/openclaw',
+      '--profile',
+      profile,
+      'pairing',
+      'approve',
+      'telegram',
+      code
+    ]);
+
+    res.json({ success: true, output });
+  } catch (error) {
+    console.error('Pairing approval error:', error);
+    res.status(500).json({ error: 'Failed to approve pairing. Make sure the container is running and the code is correct.' });
   }
 });

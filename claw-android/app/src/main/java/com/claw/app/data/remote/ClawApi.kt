@@ -178,6 +178,29 @@ class ClawApi(private val client: OkHttpClient) {
             Result.failure(e)
         }
     }
+
+    suspend fun approvePairing(instanceId: String, code: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("code", code)
+            }
+            
+            val request = Request.Builder()
+                .url("$baseUrl/api/instances/$instanceId/pairing")
+                .post(json.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            
+            val response = client.newCall(request).execute()
+            
+            if (response.isSuccessful) {
+                Result.success(true)
+            } else {
+                Result.failure(IOException("Failed to approve pairing: ${response.code}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
     
     // --- Config ---
     
