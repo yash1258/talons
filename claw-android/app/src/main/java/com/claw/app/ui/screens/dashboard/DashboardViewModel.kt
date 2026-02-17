@@ -64,7 +64,7 @@ class DashboardViewModel(
                 serverUrl
             }
             
-            val token = tokenManager.token.first()
+            val token = instance.gatewayToken ?: ""
             gatewayClient.connect(url, token)
         }
     }

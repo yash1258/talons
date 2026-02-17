@@ -354,6 +354,7 @@ class ClawApi(private val client: OkHttpClient) {
             dockerPort = obj.getInt("dockerPort"),
             status = InstanceStatus.valueOf(obj.getString("status")),
             openclawVersion = obj.optString("openclawVersion"),
+            gatewayToken = obj.optString("gatewayToken"),
             createdAt = obj.getString("createdAt")
         )
     }

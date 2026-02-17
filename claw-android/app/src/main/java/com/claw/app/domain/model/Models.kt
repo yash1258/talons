@@ -20,6 +20,7 @@ data class Instance(
     val dockerPort: Int,
     val status: InstanceStatus,
     val openclawVersion: String?,
+    val gatewayToken: String?,
     val createdAt: String,
     val runtimeStatus: RuntimeStatus? = null
 )
