@@ -33,7 +33,7 @@ const configSchema = z.object({
 configRouter.get('/:instanceId/config', async (req: AuthRequest, res: Response) => {
     try {
         const instance = await prisma.instance.findFirst({
-            where: { id: req.params.instanceId, userId: req.userId },
+            where: { id: req.params.instanceId as string, userId: req.userId },
         });
 
         if (!instance) {
@@ -52,7 +52,7 @@ configRouter.get('/:instanceId/config', async (req: AuthRequest, res: Response) 
 configRouter.put('/:instanceId/config', async (req: AuthRequest, res: Response) => {
     try {
         const instance = await prisma.instance.findFirst({
-            where: { id: req.params.instanceId, userId: req.userId },
+            where: { id: req.params.instanceId as string, userId: req.userId },
         });
 
         if (!instance) {

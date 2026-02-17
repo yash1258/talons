@@ -87,6 +87,9 @@ export async function writeConfigToContainer(
   instance: Instance,
   config: object
 ): Promise<void> {
+  if (!instance.containerId) {
+    throw new Error('Instance has no container ID — is it running?');
+  }
   const container = docker.getContainer(instance.containerId);
   const configJson = JSON.stringify(config, null, 2);
 

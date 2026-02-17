@@ -36,7 +36,7 @@ instancesRouter.get('/', async (req: AuthRequest, res) => {
 
 instancesRouter.get('/:id', async (req: AuthRequest, res) => {
   const instance = await prisma.instance.findFirst({
-    where: { id: req.params.id, userId: req.userId },
+    where: { id: req.params.id as string, userId: req.userId },
   });
 
   if (!instance) {
@@ -49,7 +49,7 @@ instancesRouter.get('/:id', async (req: AuthRequest, res) => {
 
 instancesRouter.post('/:id/start', async (req: AuthRequest, res) => {
   const instance = await prisma.instance.findFirst({
-    where: { id: req.params.id, userId: req.userId },
+    where: { id: req.params.id as string, userId: req.userId },
   });
 
   if (!instance) {
@@ -62,7 +62,7 @@ instancesRouter.post('/:id/start', async (req: AuthRequest, res) => {
 
 instancesRouter.post('/:id/stop', async (req: AuthRequest, res) => {
   const instance = await prisma.instance.findFirst({
-    where: { id: req.params.id, userId: req.userId },
+    where: { id: req.params.id as string, userId: req.userId },
   });
 
   if (!instance) {
@@ -75,7 +75,7 @@ instancesRouter.post('/:id/stop', async (req: AuthRequest, res) => {
 
 instancesRouter.delete('/:id', async (req: AuthRequest, res) => {
   const instance = await prisma.instance.findFirst({
-    where: { id: req.params.id, userId: req.userId },
+    where: { id: req.params.id as string, userId: req.userId },
   });
 
   if (!instance) {
@@ -90,7 +90,7 @@ instancesRouter.delete('/:id', async (req: AuthRequest, res) => {
 instancesRouter.get('/:id/health', async (req: AuthRequest, res) => {
   try {
     const instance = await prisma.instance.findFirst({
-      where: { id: req.params.id, userId: req.userId },
+      where: { id: req.params.id as string, userId: req.userId },
     });
 
     if (!instance) {

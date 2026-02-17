@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../db/prisma.js';
 import { z } from 'zod';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const authRouter = Router();
 
@@ -83,7 +83,7 @@ authRouter.post('/login', async (req, res) => {
   }
 });
 
-authRouter.get('/me', authenticate, async (req, res) => {
+authRouter.get('/me', authenticate, async (req: AuthRequest, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.userId },
     select: { id: true, email: true, name: true, subscription: true, createdAt: true },
