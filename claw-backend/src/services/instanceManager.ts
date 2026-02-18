@@ -82,7 +82,7 @@ export async function createInstance(userId: string, opts: CreateInstanceOptions
   // Entrypoint script: onboard if not yet done, then start daemon using 'gateway run'
   const entrypoint = [
     'sh', '-c',
-    `if [ ! -f "/home/node/.openclaw/openclaw.json" ]; then ${onboardCmd} || echo "Onboard exited with $?"; fi && exec ${OPENCLAW_BIN} gateway run --bind lan`,
+    `if [ ! -f "/home/node/.openclaw/openclaw.json" ]; then ${onboardCmd} || echo "Onboard exited with $?"; fi && exec ${OPENCLAW_BIN} gateway run --bind lan --verbose`,
   ];
 
   const container = await docker.createContainer({
