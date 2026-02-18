@@ -46,6 +46,26 @@ export interface CreateInstanceOptions {
 }
 
 export async function createInstance(userId: string, opts: CreateInstanceOptions = {}): Promise<Instance> {
+  // Prune any existing containers for this user to avoid conflicts (polling, ports, etc)
+  try {
+    const existingContainers = await docker.listContainers({
+      all: true,
+      filters: { label: [`claw.user=${userId}`] }
+    });
+    for (const containerInfo of existingContainers) {
+      console.log(`Pruning existing container ${containerInfo.Id} for user ${userId}`);
+      const container = docker.getContainer(containerInfo.Id);
+      try {
+        if (containerInfo.State === 'running') await container.stop();
+        await container.remove();
+      } catch (e) {
+        console.error(`Failed to prune container ${containerInfo.Id}:`, e);
+      }
+    }
+  } catch (e) {
+    console.error('Error listing containers for pruning:', e);
+  }
+
   const port = await getAvailablePort();
   const instanceId = randomBytes(8).toString('hex');
   const containerName = `claw-${instanceId}`;

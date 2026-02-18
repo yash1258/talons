@@ -131,7 +131,7 @@ class OnboardingViewModel(
             _uiState.value = OnboardingUiState.Loading
 
             val config = JSONObject().apply {
-                put("model", "openrouter/free")
+                put("model", "openrouter/auto")
                 put("provider", "openrouter")
             }
 

@@ -176,6 +176,35 @@ export async function updateInstanceConfig(
     existing.agents.defaults = existing.agents.defaults || {};
     existing.agents.defaults.model = existing.agents.defaults.model || {};
     existing.agents.defaults.model.primary = userConfig.model;
+
+    // Resolve provider and API key
+    let model = userConfig.model;
+    let provider = userConfig.provider || 'openrouter';
+    if (model.startsWith('anthropic/')) provider = 'anthropic';
+    else if (model.startsWith('openai/') || model.startsWith('gpt-')) provider = 'openai';
+    else if (model.startsWith('openrouter/')) provider = 'openrouter';
+
+    const isFree = instance.userId && (userConfig.model === 'openrouter/auto' || !userConfig.apiKey); // Rough heuristic for free
+    const apiKey = isFree ? OPENROUTER_FREE_KEY : (userConfig.apiKey || '');
+
+    if (apiKey) {
+      existing.models = existing.models || {};
+      existing.models.providers = existing.models.providers || {};
+      existing.models.providers[provider] = {
+        ...existing.models.providers[provider],
+        apiKey,
+        ...(provider === 'openrouter' && {
+          baseUrl: 'https://openrouter.ai/api/v1',
+          api: 'openai-completions',
+        }),
+        ...(provider === 'anthropic' && {
+          api: 'anthropic-messages',
+        }),
+        ...(provider === 'openai' && {
+          api: 'openai-responses',
+        }),
+      };
+    }
   }
 
   // Write merged config back
